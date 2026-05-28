@@ -1,7 +1,7 @@
 import React from 'react';
 import { Layout, MessageSquare, Users, BarChart3, Globe, Sparkles, Receipt, Scale, UserCheck } from 'lucide-react';
 
-export default function Sidebar({ activeTab, onSelectTab, clinicName }) {
+export default function Sidebar({ activeTab, onSelectTab, businessName }) {
   const tabs = [
     { id: 'onboarding', name: 'WhatsApp Sandbox', icon: MessageSquare },
     { id: 'caretaker', name: 'Audit Queue', icon: UserCheck },
@@ -123,7 +123,7 @@ export default function Sidebar({ activeTab, onSelectTab, clinicName }) {
           textOverflow: 'ellipsis',
           display: 'block' 
         }}>
-          {clinicName}
+          {businessName}
         </strong>
         <div style={{ 
           display: 'flex', 

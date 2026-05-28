@@ -119,7 +119,7 @@ export default function App() {
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        clinicName={activeClient.legalName}
+        businessName={activeClient.legalName}
       />
 
       {/* 2. Main Central Active Workspace Pane */}
