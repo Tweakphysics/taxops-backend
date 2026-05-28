@@ -1,0 +1,61 @@
+PROJECT MASTER DOCUMENT
+
+Vision:
+Build an AI-powered WhatsApp-first GST + ITR compliance operating system for educators, consultants, contractors, traders, and SMBs in India.
+
+Core Features:
+- GST filing
+- ITR filing
+- AI tax optimization
+- Invoice OCR
+- WhatsApp assistant
+- AI notice analyzer
+- Reminder system
+- Template engine
+- Admin dashboard
+
+Architecture:
+1. Core engine
+2. Template engine
+3. AI workflow layer
+4. WhatsApp communication layer
+
+Template Engine:
+Every category should be dynamically configurable:
+- educator
+- consultant
+- contractor
+- doctor
+- salon
+- trader
+
+Each template defines:
+- fields
+- workflows
+- reminders
+- AI prompts
+- dashboard widgets
+
+Tech Stack:
+- Next.js
+- TailwindCSS
+- FastAPI
+- PostgreSQL
+- Supabase
+- n8n
+- Claude
+- ChatGPT
+- Gemini
+- WhatsApp API
+- Railway
+- Render
+
+UX Principles:
+- conversational
+- mobile-first
+- low-tech friendly
+- regional language support
+- WhatsApp-first
+
+Long-Term Goal:
+Become the AI Business Operating System for Indian SMBs.

@@ -1,0 +1,60 @@
+STEP-BY-STEP IMPLEMENTATION GUIDE
+
+STEP 1:
+Use ChatGPT for:
+- PRD
+- roadmap
+- positioning
+- architecture planning
+
+STEP 2:
+Use Stitch/v0/Lovable for:
+- landing page
+- onboarding UI
+- dashboards
+
+STEP 3:
+Use Claude + Antigravity for:
+- frontend development
+- backend development
+- APIs
+- workflows
+
+STEP 4:
+Use Supabase for:
+- database
+- authentication
+- storage
+
+STEP 5:
+Use Gemini + PaddleOCR for:
+- invoice OCR
+- GSTIN extraction
+- amount extraction
+
+STEP 6:
+Use n8n for:
+- reminders
+- WhatsApp automation
+- onboarding workflows
+
+STEP 7:
+Use WhatsApp Cloud API for:
+- reminders
+- uploads
+- notifications
+
+STEP 8:
+Use Railway/Render/Vercel for deployment.
+
+STEP 9:
+Keep human CA verification initially.
+
+STEP 10:
+Build template engine using JSON-driven architecture.
+
+Future Expansion:
+- AI CFO
+- payroll
+- loans
+- franchise system
