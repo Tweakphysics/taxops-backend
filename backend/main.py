@@ -1,5 +1,4 @@
-# Core FastAPI Web Server for TaxOps AI Platform (MongoDB Integrated)
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -197,3 +196,79 @@ def resolve_legal_notice(notice_id: str):
         "status": "Resolved",
         "message": "ASMT-11 reply successfully compiled and filed to GSTN portal."
     }
+
+@app.get("/api/v1/whatsapp/webhook")
+def verify_whatsapp_webhook(
+    mode: Optional[str] = Query(None, alias="hub.mode"),
+    token: Optional[str] = Query(None, alias="hub.verify_token"),
+    challenge: Optional[str] = Query(None, alias="hub.challenge")
+):
+    verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "taxops_secure_webhook_token_2026")
+    
+    if mode == "subscribe" and token == verify_token:
+        print("[WhatsApp Webhook] Verification successful.")
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(content=challenge)
+    
+    print(f"[WhatsApp Webhook] Verification failed. Received token: {token}")
+    raise HTTPException(status_code=403, detail="Verification token mismatch or invalid mode.")
+
+@app.post("/api/v1/whatsapp/webhook")
+async def receive_whatsapp_message(request: Request):
+    payload = await request.json()
+    print(f"[WhatsApp Webhook] Received webhook payload: {payload}")
+    
+    if db_connected:
+        try:
+            db["whatsapp_webhooks"].insert_one(payload.copy())
+        except Exception as e:
+            print(f"[MongoDB] Webhook backup failed: {e}")
+
+    try:
+        if "entry" in payload:
+            for entry in payload["entry"]:
+                if "changes" in entry:
+                    for change in entry["changes"]:
+                        value = change.get("value", {})
+                        if "messages" in value:
+                            for msg in value["messages"]:
+                                sender_phone = msg.get("from")
+                                msg_type = msg.get("type")
+                                msg_id = msg.get("id")
+                                timestamp = msg.get("timestamp")
+                                
+                                contacts = value.get("contacts", [])
+                                sender_name = "WhatsApp User"
+                                if contacts:
+                                    sender_name = contacts[0].get("profile", {}).get("name", "WhatsApp User")
+                                
+                                message_content = ""
+                                if msg_type == "text":
+                                    message_content = msg.get("text", {}).get("body", "")
+                                elif msg_type == "image":
+                                    message_content = f"[Image Upload] Media ID: {msg.get('image', {}).get('id')}"
+                                elif msg_type == "document":
+                                    message_content = f"[Document Upload] Media ID: {msg.get('document', {}).get('id')}"
+                                else:
+                                    message_content = f"[{msg_type.capitalize()} Message]"
+
+                                db_message = {
+                                    "messageId": msg_id,
+                                    "senderPhone": sender_phone,
+                                    "senderName": sender_name,
+                                    "type": msg_type,
+                                    "content": message_content,
+                                    "timestamp": timestamp,
+                                    "raw_message": msg,
+                                    "created_at": datetime.datetime.utcnow().isoformat()
+                                }
+
+                                if db_connected:
+                                    db["whatsapp_messages"].insert_one(db_message)
+                                    print(f"[MongoDB] Saved WhatsApp message from {sender_name} ({sender_phone}) to 'whatsapp_messages'.")
+                                else:
+                                    print(f"[Offline] Received message from {sender_name}: {message_content}")
+    except Exception as e:
+        print(f"[WhatsApp Webhook] Processing failed: {e}")
+        
+    return {"status": "success"}
