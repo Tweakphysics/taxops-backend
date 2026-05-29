@@ -1,7 +1,7 @@
 // Production API Connector Utility for TaxOps AI Platform
 // Connects to local FastAPI backend or deployed Render/Railway service
 
-const API_BASE_URL = "http://localhost:8000/api/v1";
+const API_BASE_URL = "https://taxops-backend-production.up.railway.app/api/v1";
 
 export const api = {
   // 1. Template Engine

@@ -124,7 +124,7 @@ async def parse_invoice_ocr(
     if db_connected:
         try:
             db["invoices"].insert_one(invoice_data.copy())
-            print(f"[MongoDB] Logged invoice {new_inv_no} to live 'invoices' collection.")
+            print(f"[MongoDB] Logged invoice {invoice_data['invoiceNo']} to live 'invoices' collection.")
         except Exception as e:
             print(f"[MongoDB] Write failed: {e}. Logging to fallback memory.")
             invoices_db.append(invoice_data)
