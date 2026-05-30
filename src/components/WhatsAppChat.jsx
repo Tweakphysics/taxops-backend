@@ -37,6 +37,163 @@ export default function WhatsAppChat({
   const pdfInputRef = useRef(null);
   const audioInputRef = useRef(null);
 
+  // Live Speech Recognition & Audio Note Recording States
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [isRecordingVoiceNote, setIsRecordingVoiceNote] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  
+  const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  // Initialize SpeechRecognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setIsSpeechSupported(true);
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-IN'; // Indian English / Hindi friendly dictation
+
+      rec.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        const recognizedText = finalTranscript || interimTranscript;
+        
+        // If recording a Voice Note, update liveTranscript
+        // If regular input dictation, update inputText
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          if (recognizedText) {
+            setLiveTranscript(recognizedText);
+          }
+        } else {
+          if (recognizedText) {
+            setInputText(recognizedText);
+          }
+        }
+      };
+
+      rec.onerror = (event) => {
+        console.warn("Speech recognition warning/error:", event.error);
+      };
+
+      rec.onend = () => {
+        // Only turn off recording state if it's main input dictation (not Voice Note recording)
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== "recording") {
+          setIsRecording(false);
+        }
+      };
+
+      recognitionRef.current = rec;
+    }
+  }, []);
+
+  const handleToggleDictation = () => {
+    if (!isSpeechSupported) {
+      // Fallback preset query
+      setInputText("Can I claim GST tax credit on laptop purchase?");
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+      setInputText("");
+      try {
+        recognitionRef.current?.start();
+      } catch (err) {
+        console.warn("SpeechRecognition start error:", err);
+      }
+    }
+  };
+
+  const startVoiceNoteRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        setRecordedBlob(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      
+      setIsRecordingVoiceNote(true);
+      setRecordingSeconds(0);
+      setLiveTranscript("");
+
+      // Start live transcription simultaneously if supported
+      if (isSpeechSupported) {
+        try {
+          recognitionRef.current?.start();
+        } catch (err) {
+          console.warn("SpeechRecognition start error during Voice Note:", err);
+        }
+      }
+
+      // Start recording timer
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+
+    } catch (err) {
+      console.error("Microphone access error:", err);
+      alert("Microphone permission denied or not available. Please allow access or upload an audio file instead.");
+    }
+  };
+
+  const stopVoiceNoteRecording = (shouldSend = true) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+
+    setIsRecordingVoiceNote(false);
+
+    if (shouldSend) {
+      setTimeout(() => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const text = liveTranscript.trim() || "Spoken Voice Ledger Audio Note";
+        handleRealAudioUpload(audioBlob, text);
+      }, 500);
+    }
+  };
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -301,7 +458,7 @@ export default function WhatsAppChat({
           {
             id: Date.now(),
             sender: 'bot',
-            text: `Invoice parsed by Gemini 1.5 Flash AI OCR!
+            text: `Invoice parsed by Claude 3.5 Sonnet AI OCR!
 - Seller: ${response.seller || 'Unknown Merchant'}
 - Invoice No: ${response.invoiceNo}
 - Total amount: ₹${response.totalAmount} (GST: ₹${response.cgst + response.sgst + response.igst})
@@ -408,7 +565,7 @@ This purchase has been logged in your Ledger and sent to the CA queue for input 
           {
             id: Date.now(),
             sender: 'bot',
-            text: `PDF Document parsed by Gemini 1.5 Flash AI!
+            text: `PDF Document parsed by Claude 3.5 Sonnet AI!
 - Seller: ${response.seller || 'Unknown Merchant'}
 - Invoice No: ${response.invoiceNo}
 - Total amount: ₹${response.totalAmount} (GST: ₹${response.cgst + response.sgst + response.igst})
@@ -486,7 +643,7 @@ Successfully logged under Software expenses and pushed to GSTR-3B filings.`,
     setIsTyping(true);
 
     try {
-      const response = await api.parseInvoiceOCR(file, client.id);
+      const response = await api.parseInvoiceOCR(file, client.id, transcriptText);
 
       setIsTyping(false);
 
@@ -518,7 +675,7 @@ Successfully logged under Software expenses and pushed to GSTR-3B filings.`,
           {
             id: Date.now(),
             sender: 'bot',
-            text: `Voice note transcribed and parsed by Gemini 1.5 Flash!
+            text: `Voice note transcribed and parsed by Claude 3.5 Sonnet AI!
 "Parsed description: ${response.particulars}"
 
 I have categorized this under ${response.category}. Under Income Tax rules, a digital self-voucher has been successfully logged under your presumptive ITR records with zero audit risk.`,
@@ -1074,7 +1231,7 @@ I have categorized this under Business Maintenance Expenses. Under Income Tax ru
             type="button"
             onClick={() => {
               setShowAttachmentMenu(false);
-              audioInputRef.current?.click();
+              startVoiceNoteRecording();
             }}
             style={{
               background: 'transparent',
@@ -1103,101 +1260,183 @@ I have categorized this under Business Maintenance Expenses. Under Income Tax ru
       )}
 
       {/* Input Tray Footer */}
-      <form
-        onSubmit={(e) => handleSendMessage(inputText, e)}
-        style={{
+      <style>{`
+        @keyframes pulseRed {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(1.15); opacity: 1; }
+        }
+      `}</style>
+
+      {isRecordingVoiceNote ? (
+        <div style={{
           background: '#1f2c34',
           padding: '8px 12px',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: '8px',
           borderTop: '1px solid rgba(255,255,255,0.05)',
           zIndex: 10
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: '#ea4335',
+              animation: 'pulseRed 1s infinite alternate'
+            }}></div>
+            <span style={{ fontSize: '12px', color: '#e9edef', fontWeight: '600' }}>
+              Recording: {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          
+          {liveTranscript && (
+            <div style={{
+              flex: 1,
+              padding: '0 12px',
+              fontSize: '11px',
+              color: '#8696a0',
+              fontStyle: 'italic',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: '160px',
+              textAlign: 'center'
+            }} title={liveTranscript}>
+              "{liveTranscript}"
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              onClick={() => stopVoiceNoteRecording(false)}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: 'none',
+                color: '#ea4335',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => stopVoiceNoteRecording(true)}
+              style={{
+                background: '#00a884',
+                border: 'none',
+                color: '#fff',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Send size={10} /> Send
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => handleSendMessage(inputText, e)}
           style={{
-            background: showAttachmentMenu ? 'rgba(255,255,255,0.05)' : 'transparent',
-            border: 'none',
-            color: showAttachmentMenu ? 'var(--accent)' : '#8696a0',
-            padding: '6px',
-            cursor: 'pointer',
-            borderRadius: '50%',
+            background: '#1f2c34',
+            padding: '8px 12px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.2s ease'
+            gap: '8px',
+            borderTop: '1px solid rgba(255,255,255,0.05)',
+            zIndex: 10
           }}
-          title="Attach File / Document / Voice"
         >
-          {showAttachmentMenu ? <X size={18} /> : <Paperclip size={18} />}
-        </button>
-
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Type message or attach invoices..."
-          style={{
-            flex: 1,
-            background: '#2a3942',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '8px 14px',
-            color: '#e9edef',
-            fontSize: '12px',
-            outline: 'none'
-          }}
-        />
-
-        {inputText.trim() ? (
-          <button
-            type="submit"
-            style={{
-              background: '#00a884',
-              border: 'none',
-              borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <Send size={14} />
-          </button>
-        ) : (
           <button
             type="button"
-            onClick={() => {
-              setIsRecording(!isRecording);
-              if (!isRecording) {
-                // Simulate speaking a voice query
-                setInputText("Can I claim GST tax credit on laptop purchase?");
-              }
-            }}
+            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
             style={{
-              background: isRecording ? '#ea4335' : 'transparent',
+              background: showAttachmentMenu ? 'rgba(255,255,255,0.05)' : 'transparent',
               border: 'none',
+              color: showAttachmentMenu ? 'var(--accent)' : '#8696a0',
+              padding: '6px',
+              cursor: 'pointer',
               borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              color: isRecording ? '#fff' : '#8696a0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer'
+              transition: 'all 0.2s ease'
             }}
-            title="Ask Voice Query"
+            title="Attach File / Document / Voice"
           >
-            <Mic size={16} className={isRecording ? "animate-pulse" : ""} />
+            {showAttachmentMenu ? <X size={18} /> : <Paperclip size={18} />}
           </button>
-        )}
-      </form>
+
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={isRecording ? "Listening..." : "Type message or attach invoices..."}
+            style={{
+              flex: 1,
+              background: '#2a3942',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              color: '#e9edef',
+              fontSize: '12px',
+              outline: 'none'
+            }}
+          />
+
+          {inputText.trim() ? (
+            <button
+              type="submit"
+              style={{
+                background: '#00a884',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Send size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleToggleDictation}
+              style={{
+                background: isRecording ? '#ea4335' : 'transparent',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                color: isRecording ? '#fff' : '#8696a0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              title="Ask Voice Query"
+            >
+              <Mic size={16} className={isRecording ? "animate-pulse" : ""} />
+            </button>
+          )}
+        </form>
+      )}
 
       <input
         type="file"

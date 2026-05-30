@@ -19,11 +19,14 @@ export const api = {
   },
 
   // 2. OCR Ingestion
-  parseInvoiceOCR: async (fileBlob, clientId) => {
+  parseInvoiceOCR: async (fileBlob, clientId, transcript = null) => {
     try {
       const formData = new FormData();
       formData.append("file", fileBlob);
       formData.append("client_id", clientId);
+      if (transcript) {
+        formData.append("transcript", transcript);
+      }
 
       const response = await fetch(`${API_BASE_URL}/ocr/parse`, {
         method: "POST",

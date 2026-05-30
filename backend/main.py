@@ -5,6 +5,7 @@ from typing import List, Optional
 import os
 import uuid
 import datetime
+import json
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ConfigurationError
@@ -321,13 +322,22 @@ def query_claude(system_prompt: str, user_message: str, image_bytes: bytes = Non
         })
     elif image_bytes and "pdf" in mime_type:
         try:
-            pdf_text = image_bytes.decode("utf-8", errors="ignore")
+            import io
+            from pypdf import PdfReader
+            pdf_file = io.BytesIO(image_bytes)
+            reader = PdfReader(pdf_file)
+            extracted_text = ""
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + "\n"
             content_blocks.append({
                 "type": "text",
-                "text": f"[Uploaded PDF Invoice Text Content]:\n{pdf_text[:4000]}"
+                "text": f"[Uploaded PDF Invoice Text Content]:\n{extracted_text[:6000]}"
             })
-        except Exception:
-            pass
+            print(f"[PDF Text Extractor] Extracted {len(extracted_text)} chars from PDF.")
+        except Exception as e:
+            print(f"[PDF Parse Error] Failed to extract text via pypdf: {e}")
     elif image_bytes and "audio" in mime_type:
         try:
             audio_text = image_bytes.decode("utf-8", errors="ignore")
@@ -446,7 +456,8 @@ async def chat_with_ca(query: ChatQuery):
 @app.post("/api/v1/ocr/parse")
 async def parse_invoice_ocr(
     file: UploadFile = File(...),
-    client_id: str = Form(...)
+    client_id: str = Form(...),
+    transcript: Optional[str] = Form(None)
 ):
     # Read the uploaded receipt file bytes
     file_bytes = await file.read()
@@ -523,9 +534,13 @@ async def parse_invoice_ocr(
 
     try:
         # Query Claude Sonnet 4.6 dynamically using our verified active key
+        user_msg = "Parse this transaction file and return exactly a raw JSON block matching the schema."
+        if transcript and "audio" in mime:
+            user_msg = f"The client spoke this voice note: '{transcript}'. Parse this transaction details and return exactly a raw JSON block matching the schema."
+        
         raw_ai_response = query_claude(
             system_prompt=system_prompt, 
-            user_message="Parse this transaction file and return exactly a raw JSON block matching the schema.",
+            user_message=user_msg,
             image_bytes=file_bytes,
             mime_type=mime
         )
