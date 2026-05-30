@@ -79,5 +79,21 @@ export const api = {
       console.warn("API Error (logDiagnosticTicket): Falling back to offline client models.", error);
       return null;
     }
+  },
+
+  // 6. Generative AI Chat queries
+  sendChatQuery: async (clientId, message, history) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, message, history })
+      });
+      if (!response.ok) throw new Error("Generative Chat API failed.");
+      return await response.json();
+    } catch (error) {
+      console.warn("API Error (sendChatQuery): Falling back to offline client models.", error);
+      return null;
+    }
   }
 };
