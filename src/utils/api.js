@@ -98,5 +98,34 @@ export const api = {
       console.warn("API Error (sendChatQuery): Falling back to offline client models.", error);
       return null;
     }
+  },
+
+  // 7. Presumptive Tax Calculations
+  projectPresumptiveTax: async (clientId, grossSales, totalItc) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tax/project`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, gross_sales: grossSales, total_itc: totalItc })
+      });
+      if (!response.ok) throw new Error("Presumptive tax projection API failed.");
+      return await response.json();
+    } catch (error) {
+      console.warn("API Error (projectPresumptiveTax): Falling back to offline client models.", error);
+      return null;
+    }
+  },
+
+  // 8. Dynamic Client Health Score & Next Best Actions
+  getClientHealth: async (clientId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/clients/${clientId}/health`);
+      if (!response.ok) throw new Error("Failed to load client health summary.");
+      return await response.json();
+    } catch (error) {
+      console.warn("API Error (getClientHealth): Falling back to offline client models.", error);
+      return null;
+    }
   }
 };
+

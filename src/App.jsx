@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import WhatsAppChat from './components/WhatsAppChat';
 import AdminDashboard from './components/AdminDashboard';
+import BusinessHealthCenter from './components/BusinessHealthCenter';
 import { businessTemplates } from './utils/businessTemplates';
 import { initialClients, initialInvoices, initialFilings, initialNotices } from './utils/mockDatabase';
 import { Smartphone, Monitor, Code, HelpCircle, FileText, CheckCircle, Info } from 'lucide-react';
@@ -131,66 +132,16 @@ export default function App() {
         height: '100%'
       }}>
         {activeTab === 'onboarding' ? (
-          /* WHATSAPP SANDBOX: Show Developer Guide & System Logs on Left, Chat on Right */
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', height: '90%', overflowY: 'auto' }}>
-            <div style={{ background: 'rgba(13, 148, 136, 0.04)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(13, 148, 136, 0.2)' }}>
-              <h2 style={{ margin: '0 0 8px 0', fontSize: '18px', fontFamily: 'var(--font-heading)' }}>WhatsApp Chatbot Sandbox</h2>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                Test the end-to-end user journeys using the interactive mobile screen on the right. You can type conversational tax queries, upload receipts (OCR simulation), and execute mock UPI tax payments.
-              </p>
-            </div>
-
-            {/* Template Selector Console */}
-            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px' }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: '12.5px', fontFamily: 'var(--font-heading)', color: 'var(--accent)' }}>JSON Template Engine Switcher</h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {Object.keys(businessTemplates).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => handleSwitchTemplate(key)}
-                    style={{
-                      flex: 1,
-                      background: activeClientKey === key ? 'rgba(13, 148, 136, 0.15)' : 'rgba(255,255,255,0.02)',
-                      border: activeClientKey === key ? '1px solid #0d9488' : '1px solid var(--border-color)',
-                      color: activeClientKey === key ? '#0d9488' : 'var(--text-secondary)',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    {businessTemplates[key].businessType} Schema
-                  </button>
-                ))}
-              </div>
-              <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
-                <strong>Active Description:</strong> {activeTemplate.description}<br />
-                <strong>Default Tax Rate:</strong> {activeTemplate.billingRules.gstRateDefault}% | <strong>Tax Scheme:</strong> {activeClient.scheme}
-              </div>
-            </div>
-
-            {/* Live System telemetry logs */}
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-color)', fontSize: '11.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Code size={13} color="var(--accent)" /> System Telemetry Logs (FastAPI + Supabase)
-              </div>
-              <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'monospace', fontSize: '10.5px' }}>
-                {systemLogs.map((log) => (
-                  <div key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '6px' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>[{log.time}]</span>{' '}
-                    <span style={{
-                      color: log.type === 'ocr' ? '#0d9488' : log.type === 'ca' ? '#a78bfa' : log.type === 'notice' ? '#ef4444' : '#60a5fa',
-                      fontWeight: '700',
-                      textTransform: 'uppercase'
-                    }}>[{log.type}]</span>{' '}
-                    <span style={{ color: '#e2e8f0' }}>{log.msg}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <BusinessHealthCenter
+            client={activeClient}
+            invoices={invoices.filter(i => i.clientId === activeClient.id)}
+            filings={filings.filter(f => f.clientId === activeClient.id)}
+            notices={notices.filter(n => n.clientId === activeClient.id)}
+            systemLogs={systemLogs}
+            activeTemplate={activeClientKey}
+            onSelectTab={setActiveTab}
+            onSwitchTemplate={handleSwitchTemplate}
+          />
         ) : (
           /* CA & ADMIN DASHBOARD SUBTABS: Render Admin Console directly on Left */
           <AdminDashboard

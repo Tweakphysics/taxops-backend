@@ -3,11 +3,11 @@ import { Layout, MessageSquare, Users, BarChart3, Globe, Sparkles, Receipt, Scal
 
 export default function Sidebar({ activeTab, onSelectTab, businessName }) {
   const tabs = [
-    { id: 'onboarding', name: 'WhatsApp Sandbox', icon: MessageSquare },
-    { id: 'caretaker', name: 'Audit Queue', icon: UserCheck },
-    { id: 'crm', name: 'Transaction Ledger', icon: Receipt },
-    { id: 'analytics', name: 'Notices Scrutiny', icon: Scale },
-    { id: 'domains', name: 'Org Configurations', icon: Globe }
+    { id: 'onboarding', name: '💬 WhatsApp Chat', icon: MessageSquare },
+    { id: 'caretaker', name: '🔍 CA Audit Queue', icon: UserCheck },
+    { id: 'crm', name: '📖 Ledger Records', icon: Receipt },
+    { id: 'analytics', name: '⚖ Respond to Notices', icon: Scale },
+    { id: 'domains', name: '⚙ Org Settings', icon: Globe }
   ];
 
   return (

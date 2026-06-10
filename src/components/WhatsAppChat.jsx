@@ -19,15 +19,16 @@ export default function WhatsAppChat({
     {
       id: 1,
       sender: 'bot',
-      text: `Welcome back, Rohan! I am your AI Tax Assistant. GSTR-3B for May 2026 is due in 3 days. Your output sales GST is ₹27,000 and eligible Input Tax Credit (ITC) is ₹3,600. Your estimated net tax payment is ₹23,400.`,
-      timestamp: "14:15",
+      text: `Good Morning Rohan Ji! ☕\n\nYour Business Health: 92% (Excellent)\n\nFiling Deadline:\nYour May GSTR-3B return is due in 3 days.\n\nNext Best Actions:\n1. Upload 2 missing purchase bills to claim ₹4,500 tax savings.\n2. Review and approve your May GSTR-3B return.\n\nChoose an action below to proceed:`,
+      timestamp: "09:00",
       quickReplies: [
-        { label: "Prepare Return Draft", action: "prepare_return" },
-        { label: "Check Invoice Records", action: "view_ledger" },
-        { label: "Optimize Tax Legally", action: "optimize_tax" }
+        { label: "📷 Upload Invoices", action: "trigger_photo" },
+        { label: "📝 Prepare GSTR-3B", action: "prepare_return" },
+        { label: "💰 Optimize Tax Legally", action: "optimize_tax" }
       ]
     }
   ]);
+  const [onboardingStep, setOnboardingStep] = useState(null);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -36,6 +37,26 @@ export default function WhatsAppChat({
   const fileInputRef = useRef(null);
   const pdfInputRef = useRef(null);
   const audioInputRef = useRef(null);
+
+  const handleResetOnboarding = () => {
+    setOnboardingStep('gstin');
+    onUpdateClientField('gstin', 'Not Registered');
+    onUpdateClientField('legalName', 'New Enterprise');
+    
+    setMessages([
+      {
+        id: Date.now(),
+        sender: 'bot',
+        text: `Namaste! 🙏 Welcome to TaxOps AI—your 24/7 personal tax compliance concierge.\n\nI handle your monthly filings, automate receipt scanning, reply to departmental scrutinies, and connect you with expert CAs for audits and tax planning.\n\nLet's configure your profile. **What service do you need today?**`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        quickReplies: [
+          { label: "💼 GST & CA Services", action: "onboard_gst_ca_menu" },
+          { label: "📊 ITR & Tax Savings", action: "onboard_itr_savings_menu" },
+          { label: "📷 Ledger & Bill Scan", action: "onboard_ledger_scan_menu" }
+        ]
+      }
+    ]);
+  };
 
   // Live Speech Recognition & Audio Note Recording States
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
@@ -230,6 +251,31 @@ export default function WhatsAppChat({
     setMessages((prev) => [...prev, userMsg]);
     setInputText("");
 
+    if (onboardingStep === 'gstin') {
+      setIsTyping(true);
+      const gstinInput = text.trim();
+      onUpdateClientField('gstin', gstinInput);
+      onUpdateClientField('legalName', 'Dynamic Enterprise Services');
+      
+      setTimeout(() => {
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            sender: 'bot',
+            text: `GSTIN detected: ${gstinInput}! ✅\n\nEntity: **Dynamic Enterprise Services**\nTax Scheme: **Presumptive Taxation (Section 44ADA)**\n\nIs this correct?`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            quickReplies: [
+              { label: "👍 Yes, Correct", action: "onboard_confirm_gstin" },
+              { label: "❌ No, Edit", action: "onboard_edit_gstin" }
+            ]
+          }
+        ]);
+      }, 1000);
+      return;
+    }
+
     setIsTyping(true);
 
     try {
@@ -322,6 +368,43 @@ export default function WhatsAppChat({
           [{ label: "Yes, Project ITR", action: "project_itr" }]
         );
         break;
+      case "project_itr":
+        setIsTyping(true);
+        (async () => {
+          try {
+            const grossSales = invoices
+              .filter(i => i.type === 'Sales')
+              .reduce((sum, i) => sum + i.taxableValue, 0) || 150000;
+            const totalItc = invoices
+              .filter(i => i.type === 'Purchase' && i.status === 'Verified')
+              .reduce((sum, i) => sum + (i.cgst + i.sgst + i.igst), 0) || 3600;
+              
+            const projection = await api.projectPresumptiveTax(client.id, grossSales, totalItc);
+            setIsTyping(false);
+            if (projection) {
+              addBotMessage(
+                `AI Tax Projection Analysis (${projection.applicableScheme}):\n` +
+                `- Projected Gross Revenue: ₹${projection.grossSales.toLocaleString('en-IN')}\n` +
+                `- Declared Presumptive Income: ₹${projection.presumptiveIncome.toLocaleString('en-IN')}\n` +
+                `- Legal Expense Deductions Claimed: ₹${projection.estimatedExpenses.toLocaleString('en-IN')}\n` +
+                `- Eligible GST input tax credit: ₹${projection.totalItc.toLocaleString('en-IN')}\n` +
+                `- Estimated Net GST Payable: ₹${projection.netGstPayable.toLocaleString('en-IN')}\n\n` +
+                `Under Section 44ADA, you are legally saving taxes on ₹${projection.taxSavingsClaimed.toLocaleString('en-IN')} of expenses without keeping any paper bills!`,
+                [{ label: "File Draft GSTR-3B", action: "prepare_return" }, { label: "Check Ledger", action: "view_ledger" }]
+              );
+            } else {
+              throw new Error("API failed");
+            }
+          } catch (err) {
+            console.warn("Tax projection failed, using local model:", err);
+            setIsTyping(false);
+            addBotMessage(
+              "Under presumptive taxation Section 44ADA: For ₹1,50,000 professional sales, your taxable income is calculated at 50% (₹75,000). The remaining ₹75,000 is legally declared as expenses. Net GST due: ₹23,400.",
+              [{ label: "File Draft GSTR-3B", action: "prepare_return" }]
+            );
+          }
+        })();
+        break;
       case "submit_ca_audit":
         const draftFiling = filings.find(f => f.returnType === 'GSTR-3B');
         if (draftFiling && draftFiling.status === 'Draft') {
@@ -334,10 +417,198 @@ export default function WhatsAppChat({
         }
         break;
       case "trigger_photo":
-        simulateReceiptUpload();
+        fileInputRef.current?.click();
         break;
       case "trigger_pdf":
-        simulatePdfUpload();
+        pdfInputRef.current?.click();
+        break;
+      case "onboard_gst_ca_menu":
+        addBotMessage(
+          "Understood! I provide fully automated GST compliance, scrutiny replies, and CA-managed audit support.\n\n**Which GST service do you require?**",
+          [
+            { label: "💼 Link GST & ITR", action: "onboard_demo_gstin" },
+            { label: "⚖ Scrutiny & Audits", action: "onboard_scrutiny_audits" },
+            { label: "🆕 Register New GST", action: "onboard_register_new_gst" }
+          ]
+        );
+        break;
+      case "onboard_itr_savings_menu":
+        addBotMessage(
+          "Understood! I configure dynamic tax optimization models based on presumptive ITR schemes (Section 44AD/44ADA) so you legally save taxes.\n\n**Which ITR service do you require?**",
+          [
+            { label: "💼 File ITR (No GST)", action: "onboard_select_template_flow" },
+            { label: "💰 Plan Tax Savings", action: "onboard_plan_tax_savings" },
+            { label: "💡 Learn More", action: "onboard_learn_more" }
+          ]
+        );
+        break;
+      case "onboard_ledger_scan_menu":
+        addBotMessage(
+          "Great! Let's get your digital ledger active so you can track purchase bills and cash expenses immediately.\n\n**To start, select your business type to load your custom expense template:**",
+          [
+            { label: "💼 Consultant", action: "onboard_select_consultant" },
+            { label: "🛒 Trader / Retail", action: "onboard_select_trader" },
+            { label: "🎓 Educator", action: "onboard_select_educator" }
+          ]
+        );
+        break;
+      case "onboard_select_template_flow":
+        addBotMessage(
+          "Select your primary business type to configure your custom ITR template:",
+          [
+            { label: "💼 Consultant", action: "onboard_select_consultant" },
+            { label: "🛒 Trader / Retail", action: "onboard_select_trader" },
+            { label: "🎓 Educator", action: "onboard_select_educator" }
+          ]
+        );
+        break;
+      case "onboard_scrutiny_audits":
+        addBotMessage(
+          "No problem! Our AI Notice Analyzer has already scanned department notices (Form ASMT-10 scrutiny) and compiled a draft reply in your Notices tab. To link a new notice, upload the PDF directly here or tap below to consult a CA.",
+          [
+            { label: "⚖ Consult Partner CA", action: "onboard_consult_ca" },
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_register_new_gst":
+        addBotMessage(
+          "Excellent choice! Getting a GST number allows you to legally collect tax, claim tax credits, and expand your business. 🚀\n\nI will help you compile the application. To start, please upload or type your **PAN card number**:",
+          [
+            { label: "📷 Upload PAN Photo", action: "trigger_photo" },
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_plan_tax_savings":
+        addBotMessage(
+          "I have linked your ledger to the presumptive tax computation calculator. You can claim up to ₹1.5 Lakhs under Section 80C and legally declare 50% professional expenses under Section 44ADA without keeping paper bills!",
+          [
+            { label: "💰 Run Tax Calculator", action: "project_itr" },
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_consult_ca":
+        addBotMessage(
+          "Understood. Paging CA Priya Sharma for a custom audit review. She will review your ledger and notices directly on the CA Console dashboard.",
+          [
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_learn_more":
+        addBotMessage(
+          "TaxOps AI operates as your personal business concierge. You simply upload invoices or speak voice notes on WhatsApp, and we handle all GST/ITR filings and scrutiny replies in the background.",
+          [
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_demo_gstin":
+        onUpdateClientField('gstin', '27ABCDE1234F1Z1');
+        onUpdateClientField('legalName', 'Rohan Tech Services');
+        addBotMessage(
+          "GSTIN verified successfully! ✅\n\nEntity: **Rohan Tech Services** (Maharashtra)\nTax Scheme: **Presumptive Taxation (Section 44ADA)**\n\nIs this correct?",
+          [
+            { label: "👍 Yes, Correct", action: "onboard_confirm_gstin" },
+            { label: "❌ No, Edit", action: "onboard_edit_gstin" }
+          ]
+        );
+        break;
+      case "onboard_unregistered":
+        onUpdateClientField('gstin', 'Not Registered');
+        onUpdateClientField('legalName', 'New Enterprise');
+        addBotMessage(
+          "Understood. Operating as an Unregistered Micro-Business. You can file standard Income Tax returns (ITR-4) and log expenses under presumptive benefit Section 44ADA (for Professionals) or 44AD (for Retailers).\n\nLet's load your custom configuration template. Select your business type:",
+          [
+            { label: "💼 Consultant", action: "onboard_select_consultant" },
+            { label: "🛒 Trader", action: "onboard_select_trader" },
+            { label: "🎓 Educator", action: "onboard_select_educator" }
+          ]
+        );
+        break;
+      case "onboard_confirm_gstin":
+        addBotMessage(
+          "Great! Let's load your business specific configurations. Select your primary business category:",
+          [
+            { label: "💼 Consultant", action: "onboard_select_consultant" },
+            { label: "🛒 Trader", action: "onboard_select_trader" },
+            { label: "🎓 Educator", action: "onboard_select_educator" }
+          ]
+        );
+        break;
+      case "onboard_edit_gstin":
+        addBotMessage(
+          "No problem. Please type your 15-character GSTIN directly in the chat or select unregistered:",
+          [
+            { label: "❌ Unregistered Business", action: "onboard_unregistered" }
+          ]
+        );
+        break;
+      case "onboard_select_consultant":
+        onUpdateClientField('activeTemplate', 'consultant');
+        onUpdateClientField('scheme', 'Presumptive Taxation (44ADA)');
+        addBotMessage(
+          "Template schemas successfully loaded! ✅\n\nLast step: Do you want to whitelist an employee phone number so they can upload purchase bills to your ledger?",
+          [
+            { label: "📱 Yes, Add Staff", action: "onboard_add_staff" },
+            { label: "❌ No, Skip", action: "onboard_skip_staff" }
+          ]
+        );
+        break;
+      case "onboard_select_trader":
+        onUpdateClientField('activeTemplate', 'trader');
+        onUpdateClientField('scheme', 'Composition Scheme (1%)');
+        addBotMessage(
+          "Template schemas successfully loaded! ✅\n\nLast step: Do you want to whitelist an employee phone number so they can upload purchase bills to your ledger?",
+          [
+            { label: "📱 Yes, Add Staff", action: "onboard_add_staff" },
+            { label: "❌ No, Skip", action: "onboard_skip_staff" }
+          ]
+        );
+        break;
+      case "onboard_select_educator":
+        onUpdateClientField('activeTemplate', 'educator');
+        onUpdateClientField('scheme', 'Regular Scheme');
+        addBotMessage(
+          "Template schemas successfully loaded! ✅\n\nLast step: Do you want to whitelist an employee phone number so they can upload purchase bills to your ledger?",
+          [
+            { label: "📱 Yes, Add Staff", action: "onboard_add_staff" },
+            { label: "❌ No, Skip", action: "onboard_skip_staff" }
+          ]
+        );
+        break;
+      case "onboard_add_staff":
+        addBotMessage(
+          "To whitelist, simply write their 10-digit mobile number in the chat bar (e.g. 'Add staff +91 99999 88888').\n\nFor now, let's complete your concierge setup!",
+          [
+            { label: "🎉 Complete Onboarding", action: "onboard_finalize" }
+          ]
+        );
+        break;
+      case "onboard_skip_staff":
+      case "onboard_finalize":
+        setOnboardingStep(null);
+        addBotMessage(
+          "Setup Complete! 🎉\n\nYour Business Health Score is now **100% (Fully Compliant)**. I have generated your customized compliance ledger. You can now speak voice notes or upload purchase bills to log expenses instantly!\n\nWhat would you like to do first?",
+          [
+            { label: "📷 Upload Invoices", action: "trigger_photo" },
+            { label: "📝 Prepare GSTR-3B", action: "prepare_return" },
+            { label: "💰 Optimize Tax Legally", action: "optimize_tax" }
+          ]
+        );
+        break;
+      case "confirm_voice_invoice":
+        addBotMessage(
+          "Perfect! The transaction has been confirmed and saved to your ledger. Your presumptive business expenses have been optimized.",
+          [{ label: "Check Ledger Invoices", action: "view_ledger" }]
+        );
+        break;
+      case "edit_voice_invoice":
+        addBotMessage(
+          "No problem! Please tell me what details to edit (for example: 'Change amount to ₹4,000' or 'Change particulars to shop cleaning'). I will update the entry instantly."
+        );
         break;
       case "pay_tax_cpin":
         setIsTyping(true);
@@ -678,8 +949,14 @@ Successfully logged under Software expenses and pushed to GSTR-3B filings.`,
             text: `Voice note transcribed and parsed by Claude 3.5 Sonnet AI!
 "Parsed description: ${response.particulars}"
 
-I have categorized this under ${response.category}. Under Income Tax rules, a digital self-voucher has been successfully logged under your presumptive ITR records with zero audit risk.`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+I have categorized this under ${response.category}. Under Income Tax rules, a digital self-voucher has been successfully logged under your presumptive ITR records with zero audit risk.
+
+Do these details look correct?`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            quickReplies: [
+              { label: "👍 Yes, Save Entry", action: "confirm_voice_invoice" },
+              { label: "✏ Edit Details", action: "edit_voice_invoice" }
+            ]
           }
         ]);
       } else {
@@ -717,8 +994,14 @@ I have categorized this under ${response.category}. Under Income Tax rules, a di
           text: `Voice Note Transcribed! 
 "Paid ₹5,000 cash for shop painting and local labor today."
 
-I have categorized this under Business Maintenance Expenses. Under Income Tax rules, since you paid in cash without a GST receipt, I have generated a digital Self-Voucher for your ITR records. This legally claims the deduction without audit risk (stays below Section 40A(3) ₹10,000 limit).`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+I have categorized this under Business Maintenance Expenses. Under Income Tax rules, since you paid in cash without a GST receipt, I have generated a digital Self-Voucher for your ITR records. This legally claims the deduction without audit risk (stays below Section 40A(3) ₹10,000 limit).
+
+Do these details look correct?`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          quickReplies: [
+            { label: "👍 Yes, Save Entry", action: "confirm_voice_invoice" },
+            { label: "✏ Edit Details", action: "edit_voice_invoice" }
+          ]
         }
       ]);
     }
@@ -961,8 +1244,28 @@ I have categorized this under Business Maintenance Expenses. Under Income Tax ru
             Online
           </div>
         </div>
-        <div style={{ background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '4px', fontSize: '9.5px', color: '#0d9488', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {activeTemplate} template
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+          <div style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '4px', fontSize: '9px', color: '#0d9488', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {activeTemplate} template
+          </div>
+          <button 
+            type="button"
+            onClick={handleResetOnboarding}
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '4px',
+              padding: '2px 8px',
+              fontSize: '9px',
+              color: '#ef4444',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              outline: 'none'
+            }}
+          >
+            🔄 Reset Onboarding
+          </button>
         </div>
       </div>
 
