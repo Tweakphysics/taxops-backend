@@ -331,12 +331,15 @@ class TaxProjectQuery(BaseModel):
 # Endpoints
 @app.get("/")
 def read_root():
+    token = get_setting("WHATSAPP_ACCESS_TOKEN")
     return {
         "status": "online",
         "service": "TaxOps AI Backend Engine",
         "database": "MongoDB (Atlas Live)" if db_connected else "In-Memory Fallback Pool",
         "version": "1.0.0",
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.datetime.now().isoformat(),
+        "token_prefix": str(token)[:20] if token else None,
+        "token_suffix": str(token)[-15:] if token else None
     }
 
 @app.get("/api/v1/templates/{key}")
