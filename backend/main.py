@@ -256,15 +256,23 @@ if MONGO_URI:
 else:
     print("[MongoDB] MONGO_URI not found in environment. Falling back to in-memory database pools.")
 
-def get_whatsapp_access_token() -> str:
+def get_setting(key: str) -> str:
+    val = os.getenv(key)
+    if val:
+        if db_connected and db is not None:
+            try:
+                db["settings"].update_one({"key": key}, {"$set": {"value": val}}, upsert=True)
+            except Exception:
+                pass
+        return val
     if db_connected and db is not None:
         try:
-            setting = db["settings"].find_one({"key": "WHATSAPP_ACCESS_TOKEN"})
+            setting = db["settings"].find_one({"key": key})
             if setting and setting.get("value"):
                 return setting.get("value")
-        except Exception as e:
-            print(f"[MongoDB Token Fetch Error] {e}")
-    return os.getenv("WHATSAPP_ACCESS_TOKEN")
+        except Exception:
+            pass
+    return None
 
 def is_valid_gstin(gstin: str) -> bool:
     import re
@@ -338,7 +346,7 @@ def get_template(key: str):
     return BUSINESS_TEMPLATES[key]
 
 def query_claude(system_prompt: str, user_message: str, image_bytes: bytes = None, mime_type: str = "image/jpeg") -> str:
-    claude_key = os.getenv("ANTHROPIC_API_KEY")
+    claude_key = get_setting("ANTHROPIC_API_KEY")
     if not claude_key:
         raise ValueError("ANTHROPIC_API_KEY not found.")
         
@@ -772,8 +780,8 @@ def project_presumptive_tax(query: TaxProjectQuery):
     }
 
 def send_whatsapp_reply(recipient_phone: str, text: str, buttons: List[str] = None):
-    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-    access_token = get_whatsapp_access_token()
+    phone_id = get_setting("WHATSAPP_PHONE_NUMBER_ID")
+    access_token = get_setting("WHATSAPP_ACCESS_TOKEN")
     if not phone_id or not access_token:
         print("[WhatsApp Reply] Credentials missing in environment.")
         return False
@@ -836,7 +844,7 @@ def send_whatsapp_reply(recipient_phone: str, text: str, buttons: List[str] = No
 
 
 def download_meta_media(media_id: str):
-    access_token = get_whatsapp_access_token()
+    access_token = get_setting("WHATSAPP_ACCESS_TOKEN")
     if not access_token:
         print("[Media Download] Access token missing.")
         return None
