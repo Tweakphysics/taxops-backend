@@ -832,14 +832,42 @@ def send_whatsapp_reply(recipient_phone: str, text: str, buttons: List[str] = No
             }
         }
         
+    log_doc = {
+        "recipient_phone": recipient_phone,
+        "text": text,
+        "buttons": buttons,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "status": "pending"
+    }
+        
     try:
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=10) as response:
             resp_body = response.read().decode("utf-8")
             print(f"[WhatsApp Reply] Sent successfully to {recipient_phone}: {resp_body}")
+            log_doc["status"] = "success"
+            log_doc["response"] = resp_body
+            if db_connected and db is not None:
+                try:
+                    db["whatsapp_replies"].insert_one(log_doc)
+                except Exception as db_err:
+                    print(f"[MongoDB Reply Log Error] {db_err}")
             return True
     except Exception as e:
-        print(f"[WhatsApp Reply Error] Failed to send: {e}")
+        err_msg = str(e)
+        if hasattr(e, "read"):
+            try:
+                err_msg += " | " + e.read().decode("utf-8")
+            except Exception:
+                pass
+        print(f"[WhatsApp Reply Error] Failed to send: {err_msg}")
+        log_doc["status"] = "failed"
+        log_doc["error"] = err_msg
+        if db_connected and db is not None:
+            try:
+                db["whatsapp_replies"].insert_one(log_doc)
+            except Exception as db_err:
+                print(f"[MongoDB Reply Log Error] {db_err}")
         return False
 
 
